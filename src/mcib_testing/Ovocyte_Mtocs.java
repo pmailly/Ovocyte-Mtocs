@@ -358,31 +358,4 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         objectsFile.saveAsTiffStack(inDir + image + "_objects.tif");
     }
 
-//    private void EVF_info_spindle(ImagePlus spindle, Object3D spi, Objects3DPopulation mtocs) {
-//        ImageInt img = ImageInt.wrap(spindle);
-//        ImageFloat edt = EDT.run(img, 128, (float) cal.pixelWidth, (float) cal.pixelDepth, false, 0);
-//        EDT.normalizeDistanceMap(edt, img, true);
-//        for (int i = 0; i < mtocs.getNbObjects(); i++) {
-//            if (spi.includes(mtocs.getObject(i))) {
-//                IJ.log("EVF mtocs spindle " + i + " : " + edt.getPixel(mtocs.getObject(i).getCenterAsPoint()));
-//            }
-//        }
-//    }
-//
-//    private void EVF_info_poles(ImagePlus spindle, Object3D spi, Objects3DPopulation mtocs) {
-//        ImageInt img = ImageInt.wrap(spindle);
-//        Voxel3D Feret1 = spi.getFeretVoxel1();
-//        Voxel3D Feret2 = spi.getFeretVoxel2();
-//        ImageHandler poles = img.createSameDimensions();
-//        poles.setPixel(Feret1, 255);
-//        poles.setPixel(Feret2, 255);
-//        ImageFloat edt = EDT.run(poles, 128, (float) cal.pixelWidth, (float) cal.pixelDepth, true, 0);
-//        EDT.normalizeDistanceMap(edt, img, true);
-//        //edt.show("EVF_poles");
-//        for (int i = 0; i < mtocs.getNbObjects(); i++) {
-//            if (spi.includes(mtocs.getObject(i))) {
-//                IJ.log("EVF mtocs poles " + i + " : " + edt.getPixel(mtocs.getObject(i).getCenterAsPoint()));
-//            }
-//        }
-//    }
 }
