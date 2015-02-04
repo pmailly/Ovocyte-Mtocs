@@ -118,8 +118,8 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         ImageStack stack = img.getStack();
         for (int s = 1; s <= img.getNSlices(); s++) {
             // gaussian.blurGaussian(stack.getProcessor(s), 4, 4, 0.02);
-            // change to 3 to avoid spindle oversizing
-            gaussian.blurGaussian(stack.getProcessor(s), 3, 3, 0.02);
+            // change to 5 to avoid spindle oversizing
+            gaussian.blurGaussian(stack.getProcessor(s), 5, 5, 0.02);
         }
         img.updateAndDraw();
         img.setTitle("GFP_filtered");
