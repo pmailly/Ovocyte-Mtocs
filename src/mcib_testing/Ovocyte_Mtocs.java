@@ -158,12 +158,16 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
     
     // tag spindle number
     void tagsObject(ImageHandler imgObj, Object3D spots, int n) {
-        imgObj.getImagePlus().setSlice((int)spots.getCenterZ());
-        TextRoi tag = new TextRoi((int)spots.getCenterX(), (int)spots.getCenterY(), imgObj.getImagePlus());
-        TextRoi.setColor(Color.red);
-        tag.setCurrentFont(Font.getFont(Font.MONOSPACED));
-        imgObj.getImagePlus().setRoi(tag);
-        imgObj.getImagePlus().updateAndDraw();
+        ImagePlus img = imgObj.getImagePlus();
+        img.setSlice((int)spots.getCenterZ());
+        ImageProcessor ip = img.getProcessor();
+        Font tagFont = new Font("SansSerif", Font.PLAIN, 9);
+        ip.setFont(tagFont);
+        ip.setColor(Color.yellow);
+        int x = (int)spots.getCenterX();
+        int y = (int)spots.getCenterY();
+        ip.drawString(Integer.toString(n), x, y);
+        img.updateAndDraw();
     }
 
     @Override
@@ -328,11 +332,14 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         IJ.log("#Mtocs : " + mtocs.getNbObjects());
 
         ImageHandler imgObjects = img.createSameDimensions();
+        imgObjects.set332RGBLut();
         spindle.draw(imgObjects, 64);
+        int n = 0;
         for (int i = 0; i < mtocs.getNbObjects(); i++) {
             // nbre de pixel colocalise 
             IJ.log(i+" "+spindle.getColoc(mtocs.getObject(i)));
             if (spindle.getColoc(mtocs.getObject(i)) > 10) {
+                n++;
                 IJ.log("Mtocs volume :" + mtocs.getObject(i).getVolumeUnit());
                 double distBorder = mtocs.getObject(i).distBorderUnit(spindle);
                 IJ.log("spot to spindle border to border " + i + " : " + distBorder);
@@ -349,9 +356,9 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                 results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + mtocs.getObject(i).getVolumeUnit() + "\t"
                         + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFSpindle + "\t" + EVFMtocs + "\n");
                 results.flush();
-                mtocs.getObject(i).draw(imgObjects, 255);
+                mtocs.getObject(i).draw(imgObjects, 90);
                 // tag object by it number
-                tagsObject(imgObjects, mtocs.getObject(i), i);
+                tagsObject(imgObjects, mtocs.getObject(i), n);
             }
         }
         FileSaver objectsFile = new FileSaver(imgObjects.getImagePlus());
