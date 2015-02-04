@@ -347,7 +347,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                 double EVFMtocs = edtMtocs.getPixel(mtocs.getObject(i).getCenterAsPoint());
                 IJ.log("EVF mtocs spindle " + i + " : " + EVFMtocs);
                 results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + mtocs.getObject(i).getVolumeUnit() + "\t"
-                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFSpindle + "\t" + EVFMtocs + "\n");
+                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle+ "\n");
                 results.flush();
                 mtocs.getObject(i).draw(imgObjects, 90);
                 // tag object by it number
