@@ -128,11 +128,11 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
 // Differences of  Gaussian filter RFP image 
     public ImagePlus rfp_filter(ImagePlus img) {
-        GaussianBlur gauss = new GaussianBlur();
+        RankFilters median = new RankFilters();
         for (int s = 0; s <= img.getNSlices(); s++) {
             img.setSlice(s);
-            gauss.blurGaussian(img.getProcessor(), 2, 2, 0.02);
             DifferenceOfGaussians.run(img.getProcessor(), 20, 1);
+            median.rank(img.getProcessor(), 1, RankFilters.MEDIAN);
         }
         img.updateAndDraw();
         img.setTitle("RFP_filtered");
