@@ -259,9 +259,6 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                     rfpSave.saveAsTiffStack(imageDir + imageName + channelName[2] + "_mask.tif");
 
                     // ASSUME WE HAVE BINARY IMAGES HERE
-                    //gfp_crop.show("spindle");
-                    //rfp_crop.show("spots");
-                    //new WaitForUserDialog("wait").show();
                     Objects3DPopulation popTmp = getPopFromImage(gfp_crop);
                     Objects3DPopulation spots = getPopFromImage(rfp_crop);
                     // For spindle if more than one object take only the biggest
@@ -285,10 +282,6 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                             IJ.showStatus("computing distances ...");
                             computeInfo(gfp_crop, spindle, spots, outputDistAnalyze, imageDir, imageName);
                         }
-
-                        // EVF = EDT normalisee, inside spindle 
-                        // EVF_info_spindle(gfp_crop, spindle, spots);
-                        // EVF_info_poles(gfp_crop, spindle, spots);
                     }
                     gfp_crop.flush();
                     rfp_crop.flush();
@@ -334,12 +327,12 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         ImageHandler imgObjects = img.createSameDimensions();
         imgObjects.set332RGBLut();
         spindle.draw(imgObjects, 64);
-        int n = 0;
+        int nMtocs = 0;
         for (int i = 0; i < mtocs.getNbObjects(); i++) {
             // nbre de pixel colocalise 
-            IJ.log(i+" "+spindle.getColoc(mtocs.getObject(i)));
+            //IJ.log(i+" "+spindle.getColoc(mtocs.getObject(i)));
             if (spindle.getColoc(mtocs.getObject(i)) > 10) {
-                n++;
+                nMtocs++;
                 IJ.log("Mtocs volume :" + mtocs.getObject(i).getVolumeUnit());
                 double distBorder = mtocs.getObject(i).distBorderUnit(spindle);
                 IJ.log("spot to spindle border to border " + i + " : " + distBorder);
@@ -358,7 +351,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                 results.flush();
                 mtocs.getObject(i).draw(imgObjects, 90);
                 // tag object by it number
-                tagsObject(imgObjects, mtocs.getObject(i), n);
+                tagsObject(imgObjects, mtocs.getObject(i), nMtocs);
             }
         }
         FileSaver objectsFile = new FileSaver(imgObjects.getImagePlus());
