@@ -15,6 +15,7 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.gui.Roi;
+import ij.gui.TextRoi;
 import ij.io.FileSaver;
 import ij.io.Opener;
 import ij.measure.Calibration;
@@ -27,6 +28,8 @@ import ij.plugin.filter.RankFilters;
 import ij.process.AutoThresholder;
 import ij.process.ImageProcessor;
 import ij.process.StackStatistics;
+import java.awt.Color;
+import java.awt.Font;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -114,7 +117,9 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         GaussianBlur gaussian = new GaussianBlur();
         ImageStack stack = img.getStack();
         for (int s = 1; s <= img.getNSlices(); s++) {
-            gaussian.blurGaussian(stack.getProcessor(s), 4, 4, 0.02);
+            // gaussian.blurGaussian(stack.getProcessor(s), 4, 4, 0.02);
+            // change to 3 to avoid spindle oversizing
+            gaussian.blurGaussian(stack.getProcessor(s), 3, 3, 0.02);
         }
         img.updateAndDraw();
         img.setTitle("GFP_filtered");
@@ -127,7 +132,6 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         for (int s = 0; s <= img.getNSlices(); s++) {
             img.setSlice(s);
             gauss.blurGaussian(img.getProcessor(), 2, 2, 0.02);
-            // JE NE TROUVE PAS CE PLUGIN, QUELLE VERSION DE IJ ?
             DifferenceOfGaussians.run(img.getProcessor(), 20, 1);
         }
         img.updateAndDraw();
@@ -149,6 +153,17 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         ImageByte bin = ha.thresholdAboveExclusive(th);
         bin.setCalibration(cal);
         return bin.getImagePlus();
+    }
+    
+    
+    // tag spindle number
+    void tagsObject(ImageHandler imgObj, Object3D spots, int n) {
+        imgObj.getImagePlus().setSlice((int)spots.getCenterZ());
+        TextRoi tag = new TextRoi((int)spots.getCenterX(), (int)spots.getCenterY(), imgObj.getImagePlus());
+        TextRoi.setColor(Color.red);
+        tag.setCurrentFont(Font.getFont(Font.MONOSPACED));
+        imgObj.getImagePlus().setRoi(tag);
+        imgObj.getImagePlus().updateAndDraw();
     }
 
     @Override
@@ -335,37 +350,12 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                         + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFSpindle + "\t" + EVFMtocs + "\n");
                 results.flush();
                 mtocs.getObject(i).draw(imgObjects, 255);
+                // tag object by it number
+                tagsObject(imgObjects, mtocs.getObject(i), i);
             }
         }
         FileSaver objectsFile = new FileSaver(imgObjects.getImagePlus());
         objectsFile.saveAsTiffStack(inDir + image + "_objects.tif");
     }
 
-//    private void EVF_info_spindle(ImagePlus spindle, Object3D spi, Objects3DPopulation mtocs) {
-//        ImageInt img = ImageInt.wrap(spindle);
-//        ImageFloat edt = EDT.run(img, 128, (float) cal.pixelWidth, (float) cal.pixelDepth, false, 0);
-//        EDT.normalizeDistanceMap(edt, img, true);
-//        for (int i = 0; i < mtocs.getNbObjects(); i++) {
-//            if (spi.includes(mtocs.getObject(i))) {
-//                IJ.log("EVF mtocs spindle " + i + " : " + edt.getPixel(mtocs.getObject(i).getCenterAsPoint()));
-//            }
-//        }
-//    }
-//
-//    private void EVF_info_poles(ImagePlus spindle, Object3D spi, Objects3DPopulation mtocs) {
-//        ImageInt img = ImageInt.wrap(spindle);
-//        Voxel3D Feret1 = spi.getFeretVoxel1();
-//        Voxel3D Feret2 = spi.getFeretVoxel2();
-//        ImageHandler poles = img.createSameDimensions();
-//        poles.setPixel(Feret1, 255);
-//        poles.setPixel(Feret2, 255);
-//        ImageFloat edt = EDT.run(poles, 128, (float) cal.pixelWidth, (float) cal.pixelDepth, true, 0);
-//        EDT.normalizeDistanceMap(edt, img, true);
-//        //edt.show("EVF_poles");
-//        for (int i = 0; i < mtocs.getNbObjects(); i++) {
-//            if (spi.includes(mtocs.getObject(i))) {
-//                IJ.log("EVF mtocs poles " + i + " : " + edt.getPixel(mtocs.getObject(i).getCenterAsPoint()));
-//            }
-//        }
-//    }
 }
