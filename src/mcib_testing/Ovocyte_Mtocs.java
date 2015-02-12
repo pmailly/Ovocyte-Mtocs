@@ -16,17 +16,24 @@ import ij.ImagePlus;
 import ij.ImageStack;
 import ij.gui.Roi;
 import ij.gui.TextRoi;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.io.Opener;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
 import ij.plugin.Duplicator;
+import ij.plugin.RGBStackMerge;
+import ij.plugin.SubstackMaker;
 import ij.plugin.filter.DifferenceOfGaussians;
 import ij.plugin.filter.GaussianBlur;
 import ij.plugin.filter.ParticleAnalyzer;
+import ij.plugin.filter.RGBStackSplitter;
 import ij.plugin.filter.RankFilters;
 import ij.process.AutoThresholder;
+import ij.process.ByteProcessor;
+import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
+import ij.process.ShortProcessor;
 import ij.process.StackStatistics;
 import java.awt.Color;
 import java.awt.Font;
@@ -62,6 +69,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
     private Calibration cal = new Calibration();
     ImageHandler img;
 
+    
 // Find channel name in ND file
     public String[] Find_nd_info(String NDdir, String NDfile) throws FileNotFoundException, IOException {
         BufferedReader br = new BufferedReader(new FileReader(NDdir + NDfile));
@@ -113,13 +121,14 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
     }
 
 // Gaussian filter GFP image 
+    // Gaussian filter GFP image 
     public ImagePlus gfp_filter(ImagePlus img) {
         GaussianBlur gaussian = new GaussianBlur();
         ImageStack stack = img.getStack();
         for (int s = 1; s <= img.getNSlices(); s++) {
             // gaussian.blurGaussian(stack.getProcessor(s), 4, 4, 0.02);
-            // change to 5 to avoid spindle oversizing
-            gaussian.blurGaussian(stack.getProcessor(s), 5, 5, 0.02);
+            // change to 2 to avoid spindle oversizing
+            gaussian.blurGaussian(stack.getProcessor(s), 2, 2, 0.02);
         }
         img.updateAndDraw();
         img.setTitle("GFP_filtered");
@@ -129,7 +138,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 // Differences of  Gaussian filter RFP image 
     public ImagePlus rfp_filter(ImagePlus img) {
         RankFilters median = new RankFilters();
-        for (int s = 0; s <= img.getNSlices(); s++) {
+        for (int s = 1; s <= img.getNSlices(); s++) {
             img.setSlice(s);
             DifferenceOfGaussians.run(img.getProcessor(), 20, 1);
             median.rank(img.getProcessor(), 1, RankFilters.MEDIAN);
@@ -145,7 +154,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         int th;
         StackStatistics stats = new StackStatistics(img);
         if (gfp) {
-            th = at.getThreshold(AutoThresholder.Method.Yen, stats.histogram16);
+            th = at.getThreshold(AutoThresholder.Method.MaxEntropy, stats.histogram16);
         } else {
             th = at.getThreshold(AutoThresholder.Method.Default, stats.histogram16);
         }
@@ -176,7 +185,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         cal.pixelWidth = 0.1613;
         cal.pixelHeight = 0.1613;
         cal.pixelDepth = 1;
-        cal.setUnit("micron");
+        cal.setUnit("microns");
 
         try {
             if (canceled) {
@@ -234,8 +243,8 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                     ImageProcessor ipGfp = gfp_crop.getProcessor();
                     for (int s = 1; s <= gfp_crop.getNSlices(); s++) {
                         gfp_crop.setSlice(s);
-                        for (int n = 0; n < 4; n++) {
-                            ipGfp.erode();
+                        for (int n = 0; n < 3; n++) {
+                            ipGfp.dilate();
                         }
                     }
                     gfp_crop.updateAndDraw();
