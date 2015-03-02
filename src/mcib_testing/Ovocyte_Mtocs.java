@@ -15,25 +15,18 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.gui.Roi;
-import ij.gui.TextRoi;
 import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.io.Opener;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
 import ij.plugin.Duplicator;
-import ij.plugin.RGBStackMerge;
-import ij.plugin.SubstackMaker;
 import ij.plugin.filter.DifferenceOfGaussians;
 import ij.plugin.filter.GaussianBlur;
 import ij.plugin.filter.ParticleAnalyzer;
-import ij.plugin.filter.RGBStackSplitter;
 import ij.plugin.filter.RankFilters;
 import ij.process.AutoThresholder;
-import ij.process.ByteProcessor;
-import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
-import ij.process.ShortProcessor;
 import ij.process.StackStatistics;
 import java.awt.Color;
 import java.awt.Font;
@@ -96,18 +89,30 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
 // find ovocyte boundaries 
     public Roi find_crop(ImagePlus BG) {
+        int x, y, w, h;
         ImageProcessor ip = BG.getProcessor();
         RankFilters var = new RankFilters();
         ResultsTable rt = new ResultsTable();
-
         ParticleAnalyzer measure = new ParticleAnalyzer(ParticleAnalyzer.EXCLUDE_EDGE_PARTICLES + ParticleAnalyzer.INCLUDE_HOLES,
                 ParticleAnalyzer.RECT + ParticleAnalyzer.AREA, rt, 200000, 6500000);
 
         var.rank(ip, 25, RankFilters.VARIANCE);
         ip.setAutoThreshold(AutoThresholder.Method.Triangle, true);
         measure.analyze(BG, ip);
-        return (new Roi((int) rt.getValue("BX", 0), (int) rt.getValue("BY", 0),
-                (int) rt.getValue("Width", 0), (int) rt.getValue("Height", 0)));
+        // crop if object found
+        if (rt.getCounter() != 0) {
+            x = (int) rt.getValue("BX", 0);
+            y = (int) rt.getValue("BY", 0);
+            w = (int) rt.getValue("Width", 0);
+            h = (int) rt.getValue("Height", 0);
+        }
+        else {
+            x = 0;
+            y = 0;
+            w = BG.getWidth();
+            h = BG.getHeight();
+        }
+        return (new Roi(x, y, w, h));
     }
 
 // crop GFP or RFP to keep only ovocyte boundaries
@@ -172,7 +177,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         ImageProcessor ip = img.getProcessor();
         Font tagFont = new Font("SansSerif", Font.PLAIN, 9);
         ip.setFont(tagFont);
-        ip.setColor(Color.yellow);
+        ip.setColor(Color.blue);
         int x = (int)spots.getCenterX();
         int y = (int)spots.getCenterY();
         ip.drawString(Integer.toString(n), x, y);
@@ -228,33 +233,39 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                     // open GFP channel
                     ImagePlus gfp = new ImagePlus();
                     ImagePlus gfp_crop = new ImagePlus();
-
-                    gfp = opener.openTiff(imageDir, imageName + channelName[1] + ".TIF");
-
+                    // check gfp channel
+                    if (channelName[1].endsWith("GFP")) {
+                        gfp = opener.openTiff(imageDir, imageName + channelName[1] + ".TIF");
+                    }
+                    else {
+                        gfp = opener.openTiff(imageDir, imageName + channelName[2] + ".TIF");
+                    }
+                    
                     IJ.showStatus("Processing image " + imageName);
                     // crop gfp image to Ovocyte size
                     gfp_crop = crop_image(gfp, cropRoi);
                     gfp.close();
                     gfp.flush();
+
                     // filter spindle (GFP)
                     gfp_crop = gfp_filter(gfp_crop);
+                    
                     gfp_crop = threshold(gfp_crop, true);
                     gfp_crop.setCalibration(cal);
-                    ImageProcessor ipGfp = gfp_crop.getProcessor();
-                    for (int s = 1; s <= gfp_crop.getNSlices(); s++) {
-                        gfp_crop.setSlice(s);
-                        for (int n = 0; n < 3; n++) {
-                            ipGfp.dilate();
-                        }
-                    }
-                    gfp_crop.updateAndDraw();
+
                     FileSaver gfpSave = new FileSaver(gfp_crop);
                     gfpSave.saveAsTiffStack(imageDir + imageName + channelName[1] + "_mask.tif");
 
                     //open RFP channel (MTOCS)
                     ImagePlus rfp = new ImagePlus();
                     ImagePlus rfp_crop = new ImagePlus();
-                    rfp = opener.openTiff(imageDir, imageName + channelName[2] + ".TIF");
+                    // check RFP channel
+                    if (channelName[1].endsWith("RFP")) {
+                        rfp = opener.openTiff(imageDir, imageName + channelName[1] + ".TIF");
+                    }
+                    else {
+                        rfp = opener.openTiff(imageDir, imageName + channelName[2] + ".TIF");
+                    }
                     // crop gfp image to Ovocyte size
                     rfp_crop = crop_image(rfp, cropRoi);
                     rfp.close();
@@ -335,7 +346,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
         ImageHandler imgObjects = img.createSameDimensions();
         imgObjects.set332RGBLut();
-        spindle.draw(imgObjects, 64);
+        spindle.draw(imgObjects, 29);
         int nMtocs = 0;
         for (int i = 0; i < mtocs.getNbObjects(); i++) {
             // nbre de pixel colocalise 
@@ -358,7 +369,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                 results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + mtocs.getObject(i).getVolumeUnit() + "\t"
                         + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle+ "\n");
                 results.flush();
-                mtocs.getObject(i).draw(imgObjects, 90);
+                mtocs.getObject(i).draw(imgObjects, 228);
                 // tag object by it number
                 tagsObject(imgObjects, mtocs.getObject(i), nMtocs);
             }
