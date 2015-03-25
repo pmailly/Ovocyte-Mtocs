@@ -375,6 +375,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
             }
         }
         FileSaver objectsFile = new FileSaver(imgObjects.getImagePlus());
+        imgObjects.getImagePlus().setCalibration(cal);
         objectsFile.saveAsTiffStack(inDir + image + "_objects.tif");
     }
 
