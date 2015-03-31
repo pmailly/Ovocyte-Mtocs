@@ -154,15 +154,15 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
     }
 
 // Threshold images
-    public ImagePlus threshold(ImagePlus img, boolean gfp) {
+    public ImagePlus threshold(ImagePlus img) {
         AutoThresholder at = new AutoThresholder();
         int th;
         StackStatistics stats = new StackStatistics(img);
-        if (gfp) {
+        //if (gfp) {
             th = at.getThreshold(AutoThresholder.Method.MaxEntropy, stats.histogram16);
-        } else {
-            th = at.getThreshold(AutoThresholder.Method.Default, stats.histogram16);
-        }
+        //} else {
+        //    th = at.getThreshold(AutoThresholder.Method.Default, stats.histogram16);
+        //}
         ImageHandler ha = ImageHandler.wrap(img);
         ImageByte bin = ha.thresholdAboveExclusive(th);
         bin.setCalibration(cal);
@@ -211,8 +211,8 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
             FileWriter fwDistAnalyze;
             fwDistAnalyze = new FileWriter(imageDir + "Analyze_MTOCS_results.xls", false);
             BufferedWriter outputDistAnalyze = new BufferedWriter(fwDistAnalyze);
-            outputDistAnalyze.write("Image\tSpindle Vol\tSpindle Feret\tMtoc Volume\tMtoc Distance to pole\tMtoc Distance to border\t"
-                    + "Mtoc Distance to center\tEVF Spindle\tEVF Mtocs\n");
+            outputDistAnalyze.write("Image\tSpindle Vol\tSpindle Feret\tSphericity\tMtoc Volume\tMtoc Distance to pole\tMtoc Distance to border\t"
+                    + "Mtoc Distance to center\tEVF Spindle\tEVF Mtocs\tColoc\n");
             outputDistAnalyze.flush();
 
             // 
@@ -250,7 +250,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                     // filter spindle (GFP)
                     gfp_crop = gfp_filter(gfp_crop);
                     
-                    gfp_crop = threshold(gfp_crop, true);
+                    gfp_crop = threshold(gfp_crop);
                     gfp_crop.setCalibration(cal);
 
                     FileSaver gfpSave = new FileSaver(gfp_crop);
@@ -273,7 +273,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
                     // filter spindle (RFP)
                     rfp_crop = rfp_filter(rfp_crop);
-                    rfp_crop = threshold(rfp_crop, false);
+                    rfp_crop = threshold(rfp_crop);
                     rfp_crop.setCalibration(cal);
                     FileSaver rfpSave = new FileSaver(rfp_crop);
                     rfpSave.saveAsTiffStack(imageDir + imageName + channelName[2] + "_mask.tif");
@@ -346,11 +346,14 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
         ImageHandler imgObjects = img.createSameDimensions();
         imgObjects.set332RGBLut();
+        imgObjects.setCalibration(cal);
         spindle.draw(imgObjects, 29);
         int nMtocs = 0;
+        double coloc;
+        double sphSpindle = spindle.getSphericity(true);
         for (int i = 0; i < mtocs.getNbObjects(); i++) {
             // nbre de pixel colocalise 
-            //IJ.log(i+" "+spindle.getColoc(mtocs.getObject(i)));
+            coloc = spindle.getColoc(mtocs.getObject(i));
             if (spindle.getColoc(mtocs.getObject(i)) > 10) {
                 nMtocs++;
                 IJ.log("Mtocs volume :" + mtocs.getObject(i).getVolumeUnit());
@@ -366,8 +369,8 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                 IJ.log("EVF mtocs spindle " + i + " : " + EVFSpindle);
                 double EVFMtocs = edtMtocs.getPixel(mtocs.getObject(i).getCenterAsPoint());
                 IJ.log("EVF mtocs poles " + i + " : " + EVFMtocs);
-                results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + mtocs.getObject(i).getVolumeUnit() + "\t"
-                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle+ "\n");
+                results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + sphSpindle + "\t" +mtocs.getObject(i).getVolumeUnit() + "\t"
+                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle + "\t" + coloc + "\n");
                 results.flush();
                 mtocs.getObject(i).draw(imgObjects, 228);
                 // tag object by it number
@@ -375,7 +378,6 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
             }
         }
         FileSaver objectsFile = new FileSaver(imgObjects.getImagePlus());
-        imgObjects.getImagePlus().setCalibration(cal);
         objectsFile.saveAsTiffStack(inDir + image + "_objects.tif");
     }
 
