@@ -14,13 +14,14 @@ package mcib_testing;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
+import ij.gui.GenericDialog;
 import ij.gui.Roi;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.io.Opener;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
 import ij.plugin.Duplicator;
+import ij.plugin.PlugIn;
 import ij.plugin.filter.DifferenceOfGaussians;
 import ij.plugin.filter.GaussianBlur;
 import ij.plugin.filter.ParticleAnalyzer;
@@ -28,6 +29,7 @@ import ij.plugin.filter.RankFilters;
 import ij.process.AutoThresholder;
 import ij.process.ImageProcessor;
 import ij.process.StackStatistics;
+import ij.util.ThreadUtil;
 import java.awt.Color;
 import java.awt.Font;
 import java.io.BufferedReader;
@@ -48,18 +50,20 @@ import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.ImageLabeller;
 import mcib3d.image3d.distanceMap3d.EDT;
+import mcib3d.image3d.processing.FastFilters3D;
 
 /**
  *
  * @author thomasb and philippem
  */
-public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
+public class Ovocyte_Mtocs implements PlugIn {
 
     //private Object3D spindle = null;
     //private Objects3DPopulation spots = null;
     private final boolean canceled = false;
     private int nbChannel = 0;
     private Calibration cal = new Calibration();
+    private boolean mtocs = true;
     ImageHandler img;
 
     
@@ -87,6 +91,23 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         return (waveName);
     }
 
+/*
+    Dialogbox Mtocs or Chromosomes
+    */ 
+    public boolean dialogMtocs() {
+        boolean cancel = false;
+        String choice;
+        GenericDialog gd = new GenericDialog("MTOCS or Chromosomes");
+        String[] choices = {"MTOCS", "Chromosomes"};
+        gd.addRadioButtonGroup(null, choices, 1, 2, "MTOCS");
+        gd.showDialog();
+        if(gd.wasCanceled()) cancel = true;
+        choice = gd.getNextRadioButton();
+        if (choice == "MTOCS") mtocs = true;
+        return cancel;
+    }
+    
+   
 // find ovocyte boundaries 
     public Roi find_crop(ImagePlus BG) {
         int x, y, w, h;
@@ -126,13 +147,11 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
     }
 
 // Gaussian filter GFP image 
-    // Gaussian filter GFP image 
     public ImagePlus gfp_filter(ImagePlus img) {
         GaussianBlur gaussian = new GaussianBlur();
         ImageStack stack = img.getStack();
         for (int s = 1; s <= img.getNSlices(); s++) {
-            // gaussian.blurGaussian(stack.getProcessor(s), 4, 4, 0.02);
-            // change to 2 to avoid spindle oversizing
+            img.setSlice(s);
             gaussian.blurGaussian(stack.getProcessor(s), 2, 2, 0.02);
         }
         img.updateAndDraw();
@@ -140,32 +159,54 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         return (img);
     }
 
-// Differences of  Gaussian filter RFP image 
+// Differences of  Gaussian filter RFP image if chromosomes
+// 3D adaptative fast filters if mtocs 
     public ImagePlus rfp_filter(ImagePlus img) {
-        RankFilters median = new RankFilters();
-        for (int s = 1; s <= img.getNSlices(); s++) {
-            img.setSlice(s);
-            DifferenceOfGaussians.run(img.getProcessor(), 20, 1);
-            median.rank(img.getProcessor(), 1, RankFilters.MEDIAN);
+        if (mtocs) {
+            ImageInt imgInt = ImageInt.wrap(img);
+            IJ.showStatus("filtering RFP ....");
+            ImageInt AdaptLocalStack = FastFilters3D.filterIntImage(imgInt, FastFilters3D.ADAPTIVE, 3, 3, 3, ThreadUtil.getNbCpus(), true);
+            img = AdaptLocalStack.getImagePlus();
+            img.setCalibration(cal);
+        }
+        else {
+            RankFilters median = new RankFilters();
+            for (int s = 1; s <= img.getNSlices(); s++) {
+                img.setSlice(s);
+                DifferenceOfGaussians.run(img.getProcessor(), 20, 1);
+                median.rank(img.getProcessor(), 1, RankFilters.MEDIAN);
+            }
         }
         img.updateAndDraw();
         img.setTitle("RFP_filtered");
         return (img);
     }
-
-// Threshold images
-    public ImagePlus threshold(ImagePlus img) {
+// Threshold GFP images
+    public ImagePlus thresholdGFP(ImagePlus img) {
         AutoThresholder at = new AutoThresholder();
         int th;
         StackStatistics stats = new StackStatistics(img);
-        //if (gfp) {
-            th = at.getThreshold(AutoThresholder.Method.MaxEntropy, stats.histogram16);
-        //} else {
-        //    th = at.getThreshold(AutoThresholder.Method.Default, stats.histogram16);
-        //}
+        th = at.getThreshold(AutoThresholder.Method.MaxEntropy, stats.histogram16);   
         ImageHandler ha = ImageHandler.wrap(img);
         ImageByte bin = ha.thresholdAboveExclusive(th);
-        bin.setCalibration(cal);
+        bin.setCalibration(cal);  
+        return bin.getImagePlus();
+    }
+    
+// Threshold RFP images
+    public ImagePlus thresholdRFP(ImagePlus img) {
+        AutoThresholder at = new AutoThresholder();
+        int th;
+        StackStatistics stats = new StackStatistics(img);
+        if (!mtocs) {
+            th = at.getThreshold(AutoThresholder.Method.MaxEntropy, stats.histogram16);   
+        } 
+        else {
+            th = at.getThreshold(AutoThresholder.Method.Yen, stats.histogram16);
+        }
+        ImageHandler ha = ImageHandler.wrap(img);
+        ImageByte bin = ha.thresholdAboveExclusive(th);
+        bin.setCalibration(cal);  
         return bin.getImagePlus();
     }
     
@@ -206,13 +247,15 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
             if (imageFile == null) {
                 return;
             }
+            if (dialogMtocs() == true) return;
             String[] channelName = null;
             // Write headers results for distance file 
             FileWriter fwDistAnalyze;
             fwDistAnalyze = new FileWriter(imageDir + "Analyze_MTOCS_results.xls", false);
             BufferedWriter outputDistAnalyze = new BufferedWriter(fwDistAnalyze);
-            outputDistAnalyze.write("Image\tSpindle Vol\tSpindle Feret\tSphericity\tMtoc Volume\tMtoc Distance to pole\tMtoc Distance to border\t"
-                    + "Mtoc Distance to center\tEVF Spindle\tEVF Mtocs\tColoc\n");
+            outputDistAnalyze.write("Image\tSpindle Vol\tSpindle Feret\tSphericity\tFlatness\tCompactness\tMtoc Volume\tMtoc Distance to pole\t+"
+                    + "Border Mtoc distance to border spindle\tCenter Mtoc distance to border spindle\t"
+                    + "Border Mtoc distance to spindle center\tCenter Mtoc distance to spindle center\tEVF Spindle\tEVF Mtocs\tColoc (common voxels)\n");
             outputDistAnalyze.flush();
 
             // 
@@ -250,7 +293,7 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
                     // filter spindle (GFP)
                     gfp_crop = gfp_filter(gfp_crop);
                     
-                    gfp_crop = threshold(gfp_crop);
+                    gfp_crop = thresholdGFP(gfp_crop);
                     gfp_crop.setCalibration(cal);
 
                     FileSaver gfpSave = new FileSaver(gfp_crop);
@@ -273,12 +316,13 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
 
                     // filter spindle (RFP)
                     rfp_crop = rfp_filter(rfp_crop);
-                    rfp_crop = threshold(rfp_crop);
+                    rfp_crop = thresholdRFP(rfp_crop);
                     rfp_crop.setCalibration(cal);
                     FileSaver rfpSave = new FileSaver(rfp_crop);
                     rfpSave.saveAsTiffStack(imageDir + imageName + channelName[2] + "_mask.tif");
 
                     // ASSUME WE HAVE BINARY IMAGES HERE
+                    IJ.showStatus("Computing object population ...");
                     Objects3DPopulation popTmp = getPopFromImage(gfp_crop);
                     Objects3DPopulation spots = getPopFromImage(rfp_crop);
                     // For spindle if more than one object take only the biggest
@@ -351,26 +395,40 @@ public class Ovocyte_Mtocs implements ij.plugin.PlugIn {
         int nMtocs = 0;
         double coloc;
         double sphSpindle = spindle.getSphericity(true);
+        double flatSpindle = spindle.getMedianElongation();
+        double compSpindle = spindle.getCompactness(true);
         for (int i = 0; i < mtocs.getNbObjects(); i++) {
             // nbre de pixel colocalise 
             coloc = spindle.getColoc(mtocs.getObject(i));
             if (spindle.getColoc(mtocs.getObject(i)) > 10) {
                 nMtocs++;
                 IJ.log("Mtocs volume :" + mtocs.getObject(i).getVolumeUnit());
+                
                 double distBorder = mtocs.getObject(i).distBorderUnit(spindle);
-                IJ.log("spot to spindle border to border " + i + " : " + distBorder);
-                double distCenter = mtocs.getObject(i).distCenterBorderUnit(spindle);
-                IJ.log("spot to spindle center to border " + i + " : " + distCenter);
+                IJ.log("Border spot to spindle border " + i + " : " + distBorder);
+                
+                double distCenterBorder = mtocs.getObject(i).distCenterBorderUnit(spindle);
+                IJ.log("Center spot to spindle border " + i + " : " + distCenterBorder);
+                
+                double distCenter = spindle.distCenterBorderUnit(mtocs.getObject(i));
+                IJ.log("Border spot to spindle center " + i + " : " + distCenter);
+                
+                double distCenterCenter = spindle.distCenterUnit(mtocs.getObject(i));
+                IJ.log("Center spot to spindle center " + i + " : " + distCenterCenter);
+                
                 double dist1 = mtocs.getObject(i).distPixelCenter(Feret1.x, Feret1.y, Feret1.z);
                 double dist2 = mtocs.getObject(i).distPixelCenter(Feret2.x, Feret2.y, Feret2.z);
                 IJ.log("spot to poles " + i + " : " + dist1 + " " + dist2);
                 IJ.log("spot to poles " + i + " : " + Math.min(dist1, dist2));
+                
                 double EVFSpindle = edtSpindle.getPixel(mtocs.getObject(i).getCenterAsPoint());
                 IJ.log("EVF mtocs spindle " + i + " : " + EVFSpindle);
+                
                 double EVFMtocs = edtMtocs.getPixel(mtocs.getObject(i).getCenterAsPoint());
                 IJ.log("EVF mtocs poles " + i + " : " + EVFMtocs);
-                results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + sphSpindle + "\t" +mtocs.getObject(i).getVolumeUnit() + "\t"
-                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle + "\t" + coloc + "\n");
+                results.write(image + "\t" + spindle.getVolumeUnit() + "\t" + Feret_length + "\t" + sphSpindle + "\t" + flatSpindle + "\t"+ compSpindle + "\t"+
+                        mtocs.getObject(i).getVolumeUnit() + "\t"
+                        + Math.min(dist1, dist2) + "\t" + distBorder + "\t" + distCenterBorder + "\t" + distCenter + "\t" + distCenterCenter + "\t" + EVFMtocs + "\t" +  EVFSpindle + "\t" + coloc + "\n");
                 results.flush();
                 mtocs.getObject(i).draw(imgObjects, 228);
                 // tag object by it number
